@@ -8,7 +8,7 @@ import numpy as np
 from pathlib import Path
 
 
-collect_data = True 
+xml_file = 'home/zhonghezheng13579/research_projects/model_based_RL/robot_stand_up/xmls/scene_mjx_fullcollisions_flat_terrain.xml'
 
 DEFAULT_CAMERA_CONFIG = {
     "azimuth": 90.0,
@@ -32,7 +32,7 @@ class Go1MujocoEnv(MujocoEnv):
         ],
     }
 
-    def __init__(self, ctrl_type="torque", xml_file = 'home/zhonghezheng13579/research_projects/model_based_RL/robot_stand_up/xmls/scene_mjx_fullcollisions_flat_terrain.xml', **kwargs):
+    def __init__(self, ctrl_type="torque", xml_file = xml_file, collect_data = False, **kwargs):
         model_path = Path(xml_file)
         MujocoEnv.__init__(
             self,
@@ -144,21 +144,18 @@ class Go1MujocoEnv(MujocoEnv):
         self._main_body_id = mujoco.mj_name2id(
             self.model, mujoco.mjtObj.mjOBJ_BODY.value, "trunk"
         )
-
-
+        self.collect_data = collect_data
         if collect_data:
             self.curr_state = None 
-            self.act = None 
             self.next_state = None 
-            self.reward = None 
-            self.data = []
+            self.states = []
 
     def step(self, action):
         self._step += 1
 
-        self.curr_state = np.concatenate((self.qpos.copy(), self.qvel.copy()))
+        self.curr_state = np.concatenate((self.data.qpos.copy(), self.data.qvel.copy()))
         self.do_simulation(action, self.frame_skip)
-        self.next_state = self.curr_state = np.concatenate((self.qpos.copy(), self.qvel.copy()))
+        self.next_state = np.concatenate((self.data.qpos.copy(), self.data.qvel.copy()))
 
         observation = self._get_obs()
         reward, reward_info = self._calc_reward(action)
@@ -177,14 +174,21 @@ class Go1MujocoEnv(MujocoEnv):
         ):
             self.render()
             self._last_render_time = self.data.time
-
         self._last_action = action
 
-        self.data.append(((self.curr_state, self.act), (self.next_state, reward)))
-        print(((self.curr_state, self.act), (self.next_state, reward)))
-
+        if self.collect_data:
+            self.states.append(((self.curr_state, action), (self.next_state, reward)))
+            # print("Curr state: ", self.curr_state)
+            # print("Action: ", action)
+            # print("Next state: ", self.next_state)
+            # print("reward: ", reward)
+            # print()
+            info['(CurrState, Action)'] = (self.curr_state.copy(), action)
+            info['(NextState, Reward)'] = (self.next_state.copy(), reward)
+            self.curr_state = self.next_state
+    
         return observation, reward, terminated, truncated, info
-
+    
     @property
     def is_healthy(self):
         state = self.state_vector()
@@ -390,7 +394,7 @@ class Go1MujocoEnv(MujocoEnv):
 
         # reward = max(0.0, rewards - costs)
         # reward for standing (standing height from xml file)
-        reward = (self.data.qpos[2] - 0.278)**2 
+        reward = -(self.data.qpos[2] - 0.278)**2 
         # reward = rewards - self.curriculum_factor * costs
         # reward_info = {
         #     "linear_vel_tracking_reward": linear_vel_tracking_reward,
@@ -442,7 +446,6 @@ class Go1MujocoEnv(MujocoEnv):
 
     def reset_model(self):
         # Reset the position and control values with noise
-        print("Resetting")
         self.data.qpos[:] = self.model.key_qpos[2] + self.np_random.uniform(
             low=-self._reset_noise_scale,
             high=self._reset_noise_scale,
