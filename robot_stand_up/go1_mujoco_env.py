@@ -1,3 +1,4 @@
+import gymnasium as gym
 from gymnasium import spaces
 from gymnasium.envs.mujoco import MujocoEnv
 
@@ -6,6 +7,8 @@ import mujoco
 import numpy as np
 from pathlib import Path
 
+
+collect_data = True 
 
 DEFAULT_CAMERA_CONFIG = {
     "azimuth": 90.0,
@@ -29,8 +32,8 @@ class Go1MujocoEnv(MujocoEnv):
         ],
     }
 
-    def __init__(self, ctrl_type="torque", **kwargs):
-        model_path = Path(f"./unitree_go1/scene_{ctrl_type}.xml")
+    def __init__(self, ctrl_type="torque", xml_file = 'home/zhonghezheng13579/research_projects/model_based_RL/robot_stand_up/xmls/scene_mjx_fullcollisions_flat_terrain.xml', **kwargs):
+        model_path = Path(xml_file)
         MujocoEnv.__init__(
             self,
             model_path=model_path.absolute().as_posix(),
@@ -78,8 +81,8 @@ class Go1MujocoEnv(MujocoEnv):
         self._default_joint_position = np.array(self.model.key_ctrl[2])
 
         # vx (m/s), vy (m/s), wz (rad/s)
-        self._desired_velocity_min = np.array([0.5, -0.0, -0.0])
-        self._desired_velocity_max = np.array([0.5, 0.0, 0.0])
+        self._desired_velocity_min = np.array([0.0, -0.0, -0.0])
+        self._desired_velocity_max = np.array([0.0, 0.0, 0.0])
         self._desired_velocity = self._sample_desired_vel()  # [0.5, 0.0, 0.0]
         self._obs_scale = {
             "linear_velocity": 2.0,
@@ -142,9 +145,20 @@ class Go1MujocoEnv(MujocoEnv):
             self.model, mujoco.mjtObj.mjOBJ_BODY.value, "trunk"
         )
 
+
+        if collect_data:
+            self.curr_state = None 
+            self.act = None 
+            self.next_state = None 
+            self.reward = None 
+            self.data = []
+
     def step(self, action):
         self._step += 1
+
+        self.curr_state = np.concatenate((self.qpos.copy(), self.qvel.copy()))
         self.do_simulation(action, self.frame_skip)
+        self.next_state = self.curr_state = np.concatenate((self.qpos.copy(), self.qvel.copy()))
 
         observation = self._get_obs()
         reward, reward_info = self._calc_reward(action)
@@ -165,6 +179,9 @@ class Go1MujocoEnv(MujocoEnv):
             self._last_render_time = self.data.time
 
         self._last_action = action
+
+        self.data.append(((self.curr_state, self.act), (self.next_state, reward)))
+        print(((self.curr_state, self.act), (self.next_state, reward)))
 
         return observation, reward, terminated, truncated, info
 
@@ -208,7 +225,7 @@ class Go1MujocoEnv(MujocoEnv):
             np.square(self._desired_velocity[:2] - self.data.qvel[:2])
         )
         return np.exp(-vel_sqr_error / self._tracking_velocity_sigma)
-
+    
     @property
     def angular_velocity_tracking_reward(self):
         vel_sqr_error = np.square(self._desired_velocity[2] - self.data.qvel[5])
@@ -316,66 +333,75 @@ class Go1MujocoEnv(MujocoEnv):
         # TODO: Cost for thigh or calf contact with the ground
 
         # Positive Rewards
-        linear_vel_tracking_reward = (
-            self.linear_velocity_tracking_reward
-            * self.reward_weights["linear_vel_tracking"]
-        )
-        angular_vel_tracking_reward = (
-            self.angular_velocity_tracking_reward
-            * self.reward_weights["angular_vel_tracking"]
-        )
-        healthy_reward = self.healthy_reward * self.reward_weights["healthy"]
-        feet_air_time_reward = (
-            self.feet_air_time_reward * self.reward_weights["feet_airtime"]
-        )
-        rewards = (
-            linear_vel_tracking_reward
-            + angular_vel_tracking_reward
-            + healthy_reward
-            + feet_air_time_reward
-        )
+        # linear_vel_tracking_reward = (
+        #     self.linear_velocity_tracking_reward
+        #     * self.reward_weights["linear_vel_tracking"]
+        # )
+        # angular_vel_tracking_reward = (
+        #     self.angular_velocity_tracking_reward
+        #     * self.reward_weights["angular_vel_tracking"]
+        # )
+        # healthy_reward = self.healthy_reward * self.reward_weights["healthy"]
+        # feet_air_time_reward = (
+        #     self.feet_air_time_reward * self.reward_weights["feet_airtime"]
+        # )
+
+        # rewards = (
+        #     linear_vel_tracking_reward
+        #     + angular_vel_tracking_reward
+        #     + healthy_reward
+        #     + feet_air_time_reward
+        # )
 
         # Negative Costs
-        ctrl_cost = self.torque_cost * self.cost_weights["torque"]
-        action_rate_cost = (
-            self.action_rate_cost(action) * self.cost_weights["action_rate"]
-        )
-        vertical_vel_cost = (
-            self.vertical_velocity_cost * self.cost_weights["vertical_vel"]
-        )
-        xy_angular_vel_cost = (
-            self.xy_angular_velocity_cost * self.cost_weights["xy_angular_vel"]
-        )
-        joint_limit_cost = self.joint_limit_cost * self.cost_weights["joint_limit"]
-        joint_velocity_cost = (
-            self.joint_velocity_cost * self.cost_weights["joint_velocity"]
-        )
-        joint_acceleration_cost = (
-            self.acceleration_cost * self.cost_weights["joint_acceleration"]
-        )
-        orientation_cost = self.non_flat_base_cost * self.cost_weights["orientation"]
-        collision_cost = self.collision_cost * self.cost_weights["collision"]
-        default_joint_position_cost = (
-            self.default_joint_position_cost
-            * self.cost_weights["default_joint_position"]
-        )
-        costs = (
-            ctrl_cost
-            + action_rate_cost
-            + vertical_vel_cost
-            + xy_angular_vel_cost
-            + joint_limit_cost
-            + joint_acceleration_cost
-            + orientation_cost
-            + default_joint_position_cost
-        )
+        # ctrl_cost = self.torque_cost * self.cost_weights["torque"]
+        # action_rate_cost = (
+        #     self.action_rate_cost(action) * self.cost_weights["action_rate"]
+        # )
+        # vertical_vel_cost = (
+        #     self.vertical_velocity_cost * self.cost_weights["vertical_vel"]
+        # )
+        # xy_angular_vel_cost = (
+        #     self.xy_angular_velocity_cost * self.cost_weights["xy_angular_vel"]
+        # )
+        # joint_limit_cost = self.joint_limit_cost * self.cost_weights["joint_limit"]
+        # joint_velocity_cost = (
+        #     self.joint_velocity_cost * self.cost_weights["joint_velocity"]
+        # )
+        # joint_acceleration_cost = (
+        #     self.acceleration_cost * self.cost_weights["joint_acceleration"]
+        # )
+        # orientation_cost = self.non_flat_base_cost * self.cost_weights["orientation"]
+        # collision_cost = self.collision_cost * self.cost_weights["collision"]
+        # default_joint_position_cost = (
+        #     self.default_joint_position_cost
+        #     * self.cost_weights["default_joint_position"]
+        # )
+        # costs = (
+        #     ctrl_cost
+        #     + action_rate_cost
+        #     + vertical_vel_cost
+        #     + xy_angular_vel_cost
+        #     + joint_limit_cost
+        #     + joint_acceleration_cost
+        #     + orientation_cost
+        #     + default_joint_position_cost
+        # )
 
-        reward = max(0.0, rewards - costs)
+        # reward = max(0.0, rewards - costs)
+        # reward for standing (standing height from xml file)
+        reward = (self.data.qpos[2] - 0.278)**2 
         # reward = rewards - self.curriculum_factor * costs
+        # reward_info = {
+        #     "linear_vel_tracking_reward": linear_vel_tracking_reward,
+        #     "reward_ctrl": -ctrl_cost,
+        #     "reward_survive": healthy_reward,
+        # }
+
         reward_info = {
-            "linear_vel_tracking_reward": linear_vel_tracking_reward,
-            "reward_ctrl": -ctrl_cost,
-            "reward_survive": healthy_reward,
+            "linear_vel_tracking_reward": None,
+            "reward_ctrl": None,
+            "reward_survive": None,
         }
 
         return reward, reward_info
@@ -416,6 +442,7 @@ class Go1MujocoEnv(MujocoEnv):
 
     def reset_model(self):
         # Reset the position and control values with noise
+        print("Resetting")
         self.data.qpos[:] = self.model.key_qpos[2] + self.np_random.uniform(
             low=-self._reset_noise_scale,
             high=self._reset_noise_scale,
@@ -472,3 +499,11 @@ class Go1MujocoEnv(MujocoEnv):
         yaw_z = np.arctan2(t3, t4)
 
         return roll_x, pitch_y, yaw_z  # in radians
+    
+gym.register(
+    id="gymnasium_env/GO1",
+    entry_point=Go1MujocoEnv,
+)
+
+
+print("registered")
