@@ -176,15 +176,15 @@ class Go1MujocoEnv(MujocoEnv):
             self._last_render_time = self.data.time
         self._last_action = action
 
+        #TODO: use panda for collecting data
         if self.collect_data:
             self.states.append(((self.curr_state, action), (self.next_state, reward)))
             # print("Curr state: ", self.curr_state)
             # print("Action: ", action)
             # print("Next state: ", self.next_state)
             # print("reward: ", reward)
-            # print()
-            info['(CurrState, Action)'] = (self.curr_state.copy(), action)
-            info['(NextState, Reward)'] = (self.next_state.copy(), reward)
+            info['(CurrState, Action)'] = self.curr_state.copy().tolist() + action.tolist()
+            info['(NextState, Reward)'] = np.append(self.next_state.copy(),reward).tolist()
             self.curr_state = self.next_state
     
         return observation, reward, terminated, truncated, info

@@ -30,7 +30,6 @@ def main():
     for i in range(300):
         go1.step()
     
-    # not sure why causing it to go crazy
     dt = 0 
     tstep = 1000
     for i in range(tstep):

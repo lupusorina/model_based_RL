@@ -1,2 +1,6 @@
 mujoco
 gymnasium
+torch
+matplotlib
+pandas
+tensorboard
