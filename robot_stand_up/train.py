@@ -74,7 +74,7 @@ if __name__=='__main__':
     #     break
 
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
+    writer = SummaryWriter('runs/system_{}'.format(timestamp))
     epoch_number = 0
 
     EPOCHS = 3
@@ -115,7 +115,7 @@ if __name__=='__main__':
         # Track best performance, and save the model's state
         if avg_vloss < best_vloss:
             best_vloss = avg_vloss
-            model_path = 'model_{}_{}'.format(timestamp, epoch_number)
+            model_path = 'models/model_{}_{}'.format(timestamp, epoch_number)
             torch.save(model.state_dict(), model_path)
 
         epoch_number += 1

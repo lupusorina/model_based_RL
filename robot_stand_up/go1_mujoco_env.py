@@ -442,7 +442,8 @@ class Go1MujocoEnv(MujocoEnv):
             )
         ).clip(-self._clip_obs_threshold, self._clip_obs_threshold)
 
-        return curr_obs
+        # return curr_obs
+        return np.concatenate((self.data.qpos, self.data.qvel))
 
     def reset_model(self):
         # Reset the position and control values with noise
