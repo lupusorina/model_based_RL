@@ -5,6 +5,7 @@ import torch
 from model import WorldModel
 from cem import CEM
 from system import System
+import pandas as pd
 
 collect_data = False
 
@@ -19,7 +20,7 @@ nreward = 1
 
 # laod trained model output by train.py
 #TODO: not hardcode this
-PATH = '/home/zhonghezheng13579/research_projects/model_based_RL/robot_stand_up/models/model_20250427_140239_0'
+PATH = '/home/zhonghezheng13579/research_projects/model_based_RL/robot_stand_up/models/model_20250504_015259_2'
 
 loaded_model = WorldModel((nqpos + nqvel + naction), 128, (nqpos + nqvel + nreward))
 
@@ -27,12 +28,16 @@ loaded_model.load_state_dict(torch.load(PATH))
 
 system = System(loaded_model, naction)
 
-horizon = 5
+horizon = 50
 num_particles = 100
 num_iterations = 3
-num_elite = 1000
+num_elite = 10
 
-cem = CEM(horizon, num_particles, num_iterations, num_elite, np.ones((horizon, naction)), np.ones((horizon, naction, naction)))
+mean = np.array(eval(pd.read_csv('mean_and_covar.csv').iloc[0,0]))
+input = np.zeros(horizon)
+print(len(mean), len(mean[0]))
+cem = CEM(horizon, num_particles, num_iterations, num_elite, mean, np.zeros((horizon, naction, naction)), max_std_stop=0.001)
+
 wait = True
 while wait:
     best_act, best_actions, best_value = cem.optimize(observation, system, dt = 0.04, goal = None, damping_map=None, terrain_map=None, NN=None)
