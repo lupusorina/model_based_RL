@@ -12,8 +12,6 @@ class Go1:
 
     def step(self):
         mujoco.mj_step(self.model, self.data)
-        if self.visualize:
-            self.viewer.sync()
 
 def main():
     go1 = Go1()
