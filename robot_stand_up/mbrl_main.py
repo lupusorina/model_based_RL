@@ -14,7 +14,7 @@ PREDEFINED_CONFIG = True # Choice between predefined config (see the xml) or ran
 DURATION_RANDOM_POLICY = 1000 # seconds
 
 # Planner parameters.
-HORIZON_PLANNER = 100
+HORIZON_PLANNER = 10
 NUM_PARTICLES = 100
 NUM_ITERATIONS = 100
 NUM_ELITE = 100
@@ -23,6 +23,7 @@ def reward_L1(state: np.ndarray, goal: float = 0.2) -> float:
     # TODO: add in the gravity component.
     # z_component = state[..., 0]  # TODO: add for both single states and batches
     z_component = state[0] # '0' corresponds to the z-component.
+    # TODO: add the control action penalty.
     return -np.abs(z_component - goal)
 
 if __name__ == "__main__":
@@ -95,19 +96,21 @@ if __name__ == "__main__":
                            data.qvel])
 
         # Take action (optimal from CEM).
-        data.ctrl = action
+        for i in range(HORIZON_PLANNER):
+            data.ctrl = action
 
-        # Step the simulation.
-        mujoco.mj_step(model, data)
+            # Step the simulation.
+            mujoco.mj_step(model, data)
 
-        # Get next true state.
-        next_state = np.hstack([data.qpos[2: ],
-                                data.qvel])
+            # Get next true state.
+            next_state = np.hstack([data.qpos[2: ],
+                                    data.qvel])
 
-        # Learn dynamics.
-        dynamics_model_input = np.hstack([state, action])
-        dynamics_model_inputs.append(dynamics_model_input)
-        dynamics_model_outputs.append(next_state)
+            # Learn dynamics.
+            dynamics_model_input = np.hstack([state, action])
+            dynamics_model_inputs.append(dynamics_model_input)
+            dynamics_model_outputs.append(next_state)
+
         X_train = np.array(dynamics_model_inputs)
         Y_train = np.array(dynamics_model_outputs)
         dynamics_model.train(X_train, Y_train, max_epochs=100, lr=0.002, batch_size=100)
