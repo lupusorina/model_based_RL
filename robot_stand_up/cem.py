@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import os
 from tqdm import tqdm
 from typing import Callable
-from robot_stand_up.nn import MLP
+from nn import MLP
 
 def clip_vector(vector: np.ndarray, hypercube: np.ndarray) -> np.ndarray:
     return np.clip(vector, hypercube[:, 0], hypercube[:, 1])
@@ -68,6 +68,11 @@ class CEM:
                 # Get actions for current timestep for all particles
                 actions = particles[:, t, :]  # (num_particles x action_dim)
 
+                if t == 0:
+                    past_actions = actions
+                else:
+                    past_actions = particles[:, :t-1, :] # (num_particles x action_dim)
+
                 # Prepare input for dynamics model
                 inputs = np.hstack([states, actions])  # (num_particles x (state_dim + action_dim))
 
@@ -75,7 +80,7 @@ class CEM:
                 next_states = dynamics_model.forward(inputs).detach().numpy()  # (num_particles x state_dim)
 
                 # Compute rewards for all particles
-                rewards = np.array([reward(state, goal) for state in states])
+                rewards = np.array([reward(states[i], actions[i], past_actions[i], goal) for i in range(len(states))])
                 values += rewards
 
                 # Update states for next iteration

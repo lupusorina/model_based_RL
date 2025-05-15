@@ -5,8 +5,8 @@ from tqdm import tqdm
 import mujoco
 import numpy as np
 from mujoco import viewer
-from robot_stand_up.nn import MLP
-from robot_stand_up.cem import CEM
+from nn import MLP
+from cem import CEM
 import math
 
 DURATION = 200 # seconds
@@ -15,7 +15,7 @@ PREDEFINED_CONFIG = True # Choice between predefined config (see the xml) or ran
 DURATION_RANDOM_POLICY = 10 # seconds
 
 # Planner parameters.
-HORIZON_PLANNER = 3
+HORIZON_PLANNER = 1
 NUM_PARTICLES = 100
 NUM_ITERATIONS = 100
 NUM_ELITE = 10
@@ -37,7 +37,7 @@ def euler_from_quaternion(x, y, z, w):
 
     return roll_x, pitch_y, yaw_z
 
-def reward_L1(state: np.ndarray, goal: float = 0.2) -> float:
+def reward_L1(state: np.ndarray, action, past_action: np.ndarray, goal: float = 0.2) -> float:
     # TODO: add in the gravity component. 
     # TODO: reset model when fallen over.
     # z_component = state[..., 0]  # TODO: add for both single states and batches
@@ -45,9 +45,10 @@ def reward_L1(state: np.ndarray, goal: float = 0.2) -> float:
     # TODO: add the control action penalty.
 
     z_component = state[0] # '0' corresponds to the z-component.
-    roll_x, pitch_y, yaw_z = euler_from_quaternion(state[2], state[3], state[4], state[1])
-    # Roll is penalized more compared to the other two 
-    return - np.abs(z_component - goal)**2 - (np.abs(roll_x) + np.abs(pitch_y) + np.abs(yaw_z))
+    roll_x, pitch_y, yaw_z = euler_from_quaternion(state[2], state[3], state[4], state[1]) 
+
+    action_penalty = np.linalg.norm(action - past_action) # penalize large movements 
+    return - np.abs(z_component - goal)**2 - (np.abs(roll_x) + np.abs(pitch_y) + np.abs(yaw_z)) - 100*action_penalty
 
 if __name__ == "__main__":
     # Create MuJoCo env.    
@@ -97,7 +98,7 @@ if __name__ == "__main__":
     
 
     for i in pbar: 
-        action = init_ctrl + np.random.normal(0, 0.5, data.ctrl.shape)
+        action = init_ctrl + np.random.normal(0, 1, data.ctrl.shape)
         data.qpos = init_q
         for i in range(1000):       
             data.ctrl = action
@@ -111,7 +112,7 @@ if __name__ == "__main__":
             dynamics_model_outputs.append(next_state)
             state = next_state.copy()
 
-            action = data.qpos[7:] + np.random.normal(0, 0.5, data.ctrl.shape)
+            action = data.qpos[7:] + np.random.normal(0, 1, data.ctrl.shape)
 
             if VISUALIZE is True:
                 if v.is_running():
@@ -151,7 +152,7 @@ if __name__ == "__main__":
 
         X_train = np.array(dynamics_model_inputs)
         Y_train = np.array(dynamics_model_outputs)
-        dynamics_model.train(X_train, Y_train, max_epochs=10, lr=0.002, batch_size=10)
+        dynamics_model.train(X_train, Y_train, max_epochs=5, lr=0.002, batch_size=10)
 
         # Plan with CEM and the learned dynamics.
         action_traj, _, _ = planner.optimize(state, dynamics_model, reward_L1, goal=0.2)
